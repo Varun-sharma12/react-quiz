@@ -9,7 +9,10 @@ import Question from "./Question";
 import NextButton from "./NextButton";
 import Progress from "./Progress";
 import FinishScreen from "./FinishScreen";
+import Footer from "./Footer";
+import Timer from "./Timer";
 // import { act } from "react-dom/test-utils";
+const SECS_PER_QUESTION = 30;
 const initialState = {
   questions: [],
   // Various possibilities of status is [loading, error, ready, active, finished]
@@ -17,6 +20,8 @@ const initialState = {
   index: 0,
   answer: null,
   points: 0,
+  highscore: 0,
+  secondsRemaining: null
 };
 function reducer(state, action) {
   switch (action.type) {
@@ -25,7 +30,7 @@ function reducer(state, action) {
     case "dataFailed":
       return { ...state, status: "error" };
     case "start":
-      return { ...state, status: "active" };
+      return { ...state, status: "active" , secondsRemaining: state.questions.length * SECS_PER_QUESTION };
     case "newAnswer":
       const question = state.questions.at(state.index);
       return {
@@ -38,20 +43,34 @@ function reducer(state, action) {
       };
     case "nextQuestion":
       return { ...state, answer: null, index: state.index + 1 };
-      case "finish":
-        return {...state, status: 'finished'}
+    case "finish":
+      return {
+        ...state,
+        status: "finished",
+        highscore:
+          state.points > state.highscore ? state.points : state.highscore,
+      };
+    case "restart":
+      return { ...initialState, questions: state.questions, highscore: state.highscore, status: "active" };
+    // return {...state, status: 'active', index: 0, points: 0, answer: null}
+    case "tick":
+      return {...state, secondsRemaining: state.secondsRemaining - 1,
+      status: state.secondsRemaining === 0 ? "finished" : state.status,  highscore:
+      state.points > state.highscore ? state.points : state.highscore,
+      };
     default:
       throw new Error("action is unknown");
   }
 }
 
 function App() {
-  const [{ questions, status, index, answer, points }, dispatch] = useReducer(
-    reducer,
-    initialState
-  );
+  const [{ questions, status, index, answer, points, highscore, secondsRemaining }, dispatch] =
+    useReducer(reducer, initialState);
   const numQuestions = questions.length;
-  const totalPoints = questions.reduce((acc, current) =>  acc + current.points, 0);
+  const totalPoints = questions.reduce(
+    (acc, current) => acc + current.points,
+    0
+  );
   //UseEffect to fetch the data initally.
   useEffect(function () {
     fetch("http://localhost:8000/questions")
@@ -72,21 +91,37 @@ function App() {
         )}
         {status === "active" && (
           <>
-          <Progress index={index} numQuestions={numQuestions} points={points} totalPoints = {totalPoints} answer={answer}/>
-            {" "}
+            <Progress
+              index={index}
+              numQuestions={numQuestions}
+              points={points}
+              totalPoints={totalPoints}
+              answer={answer}
+            />{" "}
             <Question
               question={questions[index]}
               dispatch={dispatch}
               answer={answer}
             />
-        <NextButton dispatch={dispatch} answer={answer} numQuestions={numQuestions} index={index} />
+            <Footer>
+              <Timer dispatch={dispatch} secondsRemaining={secondsRemaining} />
+              <NextButton
+                dispatch={dispatch}
+                answer={answer}
+                numQuestions={numQuestions}
+                index={index}
+              />
+            </Footer>
           </>
         )}
-        {
-    status === 'finished' && <FinishScreen points = {points}  totalPoints = {totalPoints} /> 
-        }
-        {/* <p>1/15</p>
-        <p>Question?</p> */}
+        {status === "finished" && (
+          <FinishScreen
+            dispatch={dispatch}
+            points={points}
+            highscore={highscore}
+            totalPoints={totalPoints}
+          />
+        )}
       </Main>
     </div>
   );
